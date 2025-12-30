@@ -1,3 +1,17 @@
 flask
 flask-cors
 gunicorn
+
+numpy
+pandas
+scikit-learn
+
+aiohttp
+requests
+asyncio
+
+geopandas
+shapely
+osmnx
+
+overpy

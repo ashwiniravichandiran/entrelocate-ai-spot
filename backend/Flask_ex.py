@@ -8,9 +8,14 @@ from sklearn.metrics import silhouette_score
 from collections import Counter
 import aiohttp
 import asyncio
+import concurrent.futures
+import statistics
+import overpy
+import time
 import geopandas as gpd
 import osmnx as ox
 from shapely.geometry import Point
+import requests
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from sklearn.preprocessing import StandardScaler
