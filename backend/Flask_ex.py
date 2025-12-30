@@ -26,6 +26,12 @@ import random
 app = Flask(__name__)
 CORS(app)
 
+
+@app.route("/")
+def home():
+    return "EntreLocate backend running 🚀"
+
+
 # ============================================================================
 # FREE NOMINATIM API FOR GEOCODING (NO API KEY NEEDED)
 # ============================================================================
@@ -953,7 +959,3 @@ if __name__ == "__main__":
         app.run(debug=True, use_reloader=False, threaded=True)
     else:
         app.run(debug=True, threaded=True)
-
-@app.route("/")
-def home():
-    return "EntreLocate backend running 🚀"
