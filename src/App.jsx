@@ -15,7 +15,7 @@ import LocationResults from "./pages/LocationResults";
 import AnalysisResults from "./pages/AnalysisResults";
 import NotFound from "./pages/NotFound";
 import ClusterDetails from "./pages/ClusterDetails";
-import ShopTypeAnalyzer from "./pages/shopTypeAnalyzer";
+import ShopTypeAnalyzer from "./pages/ShopTypeAnalyzer";
 
 const queryClient = new QueryClient();
 
