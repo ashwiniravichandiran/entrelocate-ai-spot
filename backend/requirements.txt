@@ -8,7 +8,6 @@ scikit-learn
 
 aiohttp
 requests
-asyncio
 
 geopandas
 shapely

@@ -6,8 +6,6 @@ import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 from collections import Counter
-import aiohttp
-import asyncio
 import concurrent.futures
 import statistics
 import overpy
@@ -36,7 +34,7 @@ def home():
 # FREE NOMINATIM API FOR GEOCODING (NO API KEY NEEDED)
 # ============================================================================
 
-async def get_city_bounding_box_nominatim(city_name):
+def get_city_bounding_box_nominatim(city_name):
     """
     Get city bounding box using free Nominatim API (OpenStreetMap)
     No API key required!
@@ -67,70 +65,69 @@ async def get_city_bounding_box_nominatim(city_name):
     ]
     
     try:
-        async with aiohttp.ClientSession() as session:
-            for strategy_num, params in enumerate(search_strategies, 1):
-                await asyncio.sleep(1)  # Rate limiting
-                
-                async with session.get(base_url, params=params, headers=headers) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        
-                        if not data:
-                            continue
-                        
-                        # Find the best result - prefer city/town over state/region
-                        best_result = None
-                        for result in data:
-                            result_type = result.get('type', '').lower()
-                            osm_type = result.get('osm_type', '').lower()
-                            display_name = result.get('display_name', '')
-                            
-                            # For Puducherry, avoid "state" or "administrative" results
-                            # Prefer "city", "town", "municipality"
-                            if result_type in ['city', 'town', 'municipality', 'administrative'] and osm_type == 'relation':
-                                # Check if it's not the huge union territory
-                                boundingbox = result['boundingbox']
-                                min_lat = float(boundingbox[0])
-                                max_lat = float(boundingbox[1])
-                                min_lon = float(boundingbox[2])
-                                max_lon = float(boundingbox[3])
-                                
-                                # Calculate the size of the bounding box
-                                lat_diff = max_lat - min_lat
-                                lon_diff = max_lon - min_lon
-                                
-                                # If the box is too large (> 1 degree), it's probably a state/territory
-                                # A typical city should be < 0.5 degrees
-                                if lat_diff < 1.0 and lon_diff < 1.0:
-                                    best_result = result
-                                    print(f"Strategy {strategy_num}: Found suitable result: {display_name}")
-                                    break
-                            
-                            # Also accept smaller results
-                            elif result_type in ['city', 'town', 'suburb', 'neighbourhood']:
-                                best_result = result
-                                print(f"Strategy {strategy_num}: Found {result_type}: {display_name}")
-                                break
-                        
-                        if best_result:
-                            boundingbox = best_result['boundingbox']
-                            min_lat = float(boundingbox[0])
-                            max_lat = float(boundingbox[1])
-                            min_lon = float(boundingbox[2])
-                            max_lon = float(boundingbox[3])
-                            display_name = best_result.get('display_name', '')
-                            
-                            print(f"Found location: {display_name}")
-                            print(f"Bounding box for {city_name}: {min_lat}, {min_lon}, {max_lat}, {max_lon}")
-                            print(f"Box size: {max_lat - min_lat:.4f}° x {max_lon - min_lon:.4f}°")
-                            
-                            return min_lat, min_lon, max_lat, max_lon, display_name
-                
-                print(f"Strategy {strategy_num} failed, trying next...")
+        for strategy_num, params in enumerate(search_strategies, 1):
+            time.sleep(1)  # Rate limiting
             
-            print(f"All strategies failed for {city_name}")
-            return None, None, None, None, None
+            response = requests.get(base_url, params=params, headers=headers, timeout=30)
+            if response.status_code == 200:
+                data = response.json()
                 
+                if not data:
+                    continue
+                
+                # Find the best result - prefer city/town over state/region
+                best_result = None
+                for result in data:
+                    result_type = result.get('type', '').lower()
+                    osm_type = result.get('osm_type', '').lower()
+                    display_name = result.get('display_name', '')
+                    
+                    # For Puducherry, avoid "state" or "administrative" results
+                    # Prefer "city", "town", "municipality"
+                    if result_type in ['city', 'town', 'municipality', 'administrative'] and osm_type == 'relation':
+                        # Check if it's not the huge union territory
+                        boundingbox = result['boundingbox']
+                        min_lat = float(boundingbox[0])
+                        max_lat = float(boundingbox[1])
+                        min_lon = float(boundingbox[2])
+                        max_lon = float(boundingbox[3])
+                        
+                        # Calculate the size of the bounding box
+                        lat_diff = max_lat - min_lat
+                        lon_diff = max_lon - min_lon
+                        
+                        # If the box is too large (> 1 degree), it's probably a state/territory
+                        # A typical city should be < 0.5 degrees
+                        if lat_diff < 1.0 and lon_diff < 1.0:
+                            best_result = result
+                            print(f"Strategy {strategy_num}: Found suitable result: {display_name}")
+                            break
+                    
+                    # Also accept smaller results
+                    elif result_type in ['city', 'town', 'suburb', 'neighbourhood']:
+                        best_result = result
+                        print(f"Strategy {strategy_num}: Found {result_type}: {display_name}")
+                        break
+                
+                if best_result:
+                    boundingbox = best_result['boundingbox']
+                    min_lat = float(boundingbox[0])
+                    max_lat = float(boundingbox[1])
+                    min_lon = float(boundingbox[2])
+                    max_lon = float(boundingbox[3])
+                    display_name = best_result.get('display_name', '')
+                    
+                    print(f"Found location: {display_name}")
+                    print(f"Bounding box for {city_name}: {min_lat}, {min_lon}, {max_lat}, {max_lon}")
+                    print(f"Box size: {max_lat - min_lat:.4f}° x {max_lon - min_lon:.4f}°")
+                    
+                    return min_lat, min_lon, max_lat, max_lon, display_name
+            
+            print(f"Strategy {strategy_num} failed, trying next...")
+        
+        print(f"All strategies failed for {city_name}")
+        return None, None, None, None, None
+            
     except Exception as e:
         print(f"Error getting bounding box: {e}")
         return None, None, None, None, None
@@ -139,7 +136,7 @@ async def get_city_bounding_box_nominatim(city_name):
 # FREE OVERPASS API FOR LOCATION DATA (NO API KEY NEEDED)
 # ============================================================================
 
-async def fetch_places_from_overpass(city, category):
+def fetch_places_from_overpass(city, category):
     """
     Fetch places using the free Overpass API with improved city handling
     """
@@ -170,12 +167,12 @@ async def fetch_places_from_overpass(city, category):
     
     # ALWAYS use bounding box approach for reliability
     print(f"Fetching places for {city} using bounding box method...")
-    return await fetch_places_with_bbox_fallback(city, osm_tag)
+    return fetch_places_with_bbox_fallback(city, osm_tag)
 
 
-async def fetch_places_with_bbox_fallback(city, osm_tag):
+def fetch_places_with_bbox_fallback(city, osm_tag):
     """Primary method using bounding box from Nominatim"""
-    bbox_data = await get_city_bounding_box_nominatim(city)
+    bbox_data = get_city_bounding_box_nominatim(city)
     min_lat, min_lon, max_lat, max_lon, display_name = bbox_data
     
     if min_lat is None:
@@ -195,93 +192,93 @@ async def fetch_places_with_bbox_fallback(city, osm_tag):
     """
     
     try:
-        async with aiohttp.ClientSession() as session:
-            await asyncio.sleep(2)  # Rate limiting
-            timeout = aiohttp.ClientTimeout(total=90)
-            async with session.get(
-                overpass_url,
-                params={'data': bbox_query},
-                headers={"User-Agent": "LocationAnalyzer/1.0"},
-                timeout=timeout
-            ) as response:
-                if response.status != 200:
-                    return pd.DataFrame(), f"Overpass API failed with status {response.status}"
-                
-                data = await response.json()
-                if 'elements' not in data or not data['elements']:
-                    return pd.DataFrame(), f"No places found in {city} for this category"
-                
-                rows = []
-                for place in data['elements']:
-                    tags = place.get('tags', {})
-                    
-                    if 'center' in place:
-                        lat = place['center']['lat']
-                        lon = place['center']['lon']
-                    else:
-                        lat = place.get('lat')
-                        lon = place.get('lon')
-                    
-                    if lat is None or lon is None:
-                        continue
-                    
-                    # Verify the place is within our bounding box (double check)
-                    if not (min_lat <= lat <= max_lat and min_lon <= lon <= max_lon):
-                        continue
-                    
-                    address_parts = []
-                    for key in ['addr:housenumber', 'addr:street', 'addr:city', 'addr:postcode']:
-                        if key in tags:
-                            address_parts.append(tags[key])
-                    
-                    # If no address, use the display_name's city
-                    if not address_parts and display_name:
-                        city_part = display_name.split(',')[0] if ',' in display_name else city
-                        address_parts = [city_part]
-                    
-                    address = ', '.join(address_parts) if address_parts else city
-                    
-                    place_name = tags.get('name', 'Unnamed')
-                    rows.append({
-                        "Name": place_name,
-                        "Rating": round(random.uniform(3.0, 5.0), 1),
-                        "Address": address,
-                        "Latitude": lat,
-                        "Longitude": lon
-                    })
-                
-                print(f"\n{'='*60}")
-                print(f"Found {len(rows)} places in {city}")
-                print(f"{'='*60}")
-                print("\nPlace Names:")
-                for i, row in enumerate(rows[:20], 1):  # Show first 20
-                    print(f"{i:2d}. {row['Name']:40s} | {row['Address'][:40]}")
-                if len(rows) > 20:
-                    print(f"... and {len(rows) - 20} more places")
-                print(f"{'='*60}\n")
-                
-                return pd.DataFrame(rows), None
-                
+        time.sleep(2)  # Rate limiting
+        
+        response = requests.get(
+            overpass_url,
+            params={'data': bbox_query},
+            headers={"User-Agent": "LocationAnalyzer/1.0"},
+            timeout=90
+        )
+        
+        if response.status_code != 200:
+            return pd.DataFrame(), f"Overpass API failed with status {response.status_code}"
+        
+        data = response.json()
+        if 'elements' not in data or not data['elements']:
+            return pd.DataFrame(), f"No places found in {city} for this category"
+        
+        rows = []
+        for place in data['elements']:
+            tags = place.get('tags', {})
+            
+            if 'center' in place:
+                lat = place['center']['lat']
+                lon = place['center']['lon']
+            else:
+                lat = place.get('lat')
+                lon = place.get('lon')
+            
+            if lat is None or lon is None:
+                continue
+            
+            # Verify the place is within our bounding box (double check)
+            if not (min_lat <= lat <= max_lat and min_lon <= lon <= max_lon):
+                continue
+            
+            address_parts = []
+            for key in ['addr:housenumber', 'addr:street', 'addr:city', 'addr:postcode']:
+                if key in tags:
+                    address_parts.append(tags[key])
+            
+            # If no address, use the display_name's city
+            if not address_parts and display_name:
+                city_part = display_name.split(',')[0] if ',' in display_name else city
+                address_parts = [city_part]
+            
+            address = ', '.join(address_parts) if address_parts else city
+            
+            place_name = tags.get('name', 'Unnamed')
+            rows.append({
+                "Name": place_name,
+                "Rating": round(random.uniform(3.0, 5.0), 1),
+                "Address": address,
+                "Latitude": lat,
+                "Longitude": lon
+            })
+        
+        print(f"\n{'='*60}")
+        print(f"Found {len(rows)} places in {city}")
+        print(f"{'='*60}")
+        print("\nPlace Names:")
+        for i, row in enumerate(rows[:20], 1):  # Show first 20
+            print(f"{i:2d}. {row['Name']:40s} | {row['Address'][:40]}")
+        if len(rows) > 20:
+            print(f"... and {len(rows) - 20} more places")
+        print(f"{'='*60}\n")
+        
+        return pd.DataFrame(rows), None
+            
     except Exception as e:
         return pd.DataFrame(), str(e)
 
 
-async def fetch_and_process_data(city, category):
+def fetch_and_process_data(city, category):
     """
     Use Overpass API instead of Foursquare for free data
     """
-    return await fetch_places_from_overpass(city, category)
+    return fetch_places_from_overpass(city, category)
 
 
-async def get_data_for_city(city, business):
-    return await fetch_and_process_data(city, business)
+def get_data_for_city(city, business):
+    return fetch_and_process_data(city, business)
 
 
-async def get_shops_in_bounding_box_by_city(city, limit=200):
+def get_shops_in_bounding_box_by_city(city, limit=200):
     """
     Fetch shops for a city by first getting its bounding box
     """
-    bbox_data = await get_city_bounding_box_nominatim(city)
+    bbox_data = get_city_bounding_box_nominatim(city)
     min_lat, min_lon, max_lat, max_lon, display_name = bbox_data
     
     if min_lat is None:
@@ -289,10 +286,10 @@ async def get_shops_in_bounding_box_by_city(city, limit=200):
         return []
     
     print(f"Fetching shops for: {display_name}")
-    return await get_shops_in_bounding_box(min_lat, min_lon, max_lat, max_lon, limit)
+    return get_shops_in_bounding_box(min_lat, min_lon, max_lat, max_lon, limit)
 
 
-async def get_shops_in_bounding_box(min_lat, min_lon, max_lat, max_lon, limit=200):
+def get_shops_in_bounding_box(min_lat, min_lon, max_lat, max_lon, limit=200):
     """
     Fetch shops within a bounding box using the Overpass API.
     """
@@ -315,64 +312,64 @@ async def get_shops_in_bounding_box(min_lat, min_lon, max_lat, max_lon, limit=20
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            async with aiohttp.ClientSession() as session:
-                await asyncio.sleep(2)  # Rate limiting
-                timeout = aiohttp.ClientTimeout(total=90)
-                async with session.get(
-                    overpass_url, 
-                    params={'data': overpass_query}, 
-                    headers=headers,
-                    timeout=timeout
-                ) as response:
-                    if response.status == 504:
-                        if attempt < max_retries - 1:
-                            wait_time = (attempt + 1) * 5
-                            print(f"Timeout on attempt {attempt + 1}, retrying in {wait_time}s...")
-                            await asyncio.sleep(wait_time)
-                            continue
-                        else:
-                            print(f"Failed after {max_retries} attempts")
-                            return []
-                    
-                    if response.status != 200:
-                        print(f"Failed to retrieve data. Status code: {response.status}")
-                        return []
-                    
-                    data = await response.json()
+            time.sleep(2)  # Rate limiting
+            
+            response = requests.get(
+                overpass_url, 
+                params={'data': overpass_query}, 
+                headers=headers,
+                timeout=90
+            )
+            
+            if response.status_code == 504:
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 5
+                    print(f"Timeout on attempt {attempt + 1}, retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    print(f"Failed after {max_retries} attempts")
+                    return []
+            
+            if response.status_code != 200:
+                print(f"Failed to retrieve data. Status code: {response.status_code}")
+                return []
+            
+            data = response.json()
 
-                    if 'elements' not in data:
-                        print("No data found in the response.")
-                        return []
+            if 'elements' not in data:
+                print("No data found in the response.")
+                return []
 
-                    shops = data['elements']
-                    print(f"Found {len(shops)} shops.")
+            shops = data['elements']
+            print(f"Found {len(shops)} shops.")
 
-                    shop_data = []
-                    for shop in shops:
-                        if 'tags' in shop:
-                            if 'center' in shop:
-                                lat = shop['center']['lat']
-                                lon = shop['center']['lon']
-                            else:
-                                lat = shop.get('lat')
-                                lon = shop.get('lon')
+            shop_data = []
+            for shop in shops:
+                if 'tags' in shop:
+                    if 'center' in shop:
+                        lat = shop['center']['lat']
+                        lon = shop['center']['lon']
+                    else:
+                        lat = shop.get('lat')
+                        lon = shop.get('lon')
 
-                            if lat is not None and lon is not None:
-                                # Verify within bounding box
-                                if min_lat <= lat <= max_lat and min_lon <= lon <= max_lon:
-                                    shop_data.append({
-                                        'name': shop['tags'].get('name', 'Unnamed shop'),
-                                        'type': shop['tags'].get('shop', 'Unspecified'),
-                                        'lat': lat,
-                                        'lon': lon
-                                    })
+                    if lat is not None and lon is not None:
+                        # Verify within bounding box
+                        if min_lat <= lat <= max_lat and min_lon <= lon <= max_lon:
+                            shop_data.append({
+                                'name': shop['tags'].get('name', 'Unnamed shop'),
+                                'type': shop['tags'].get('shop', 'Unspecified'),
+                                'lat': lat,
+                                'lon': lon
+                            })
 
-                    return shop_data
+            return shop_data
 
-        except asyncio.TimeoutError:
+        except requests.exceptions.Timeout:
             if attempt < max_retries - 1:
                 print(f"Timeout on attempt {attempt + 1}, retrying...")
-                await asyncio.sleep((attempt + 1) * 5)
+                time.sleep((attempt + 1) * 5)
                 continue
             else:
                 print("Request timed out after all retries.")
@@ -380,7 +377,7 @@ async def get_shops_in_bounding_box(min_lat, min_lon, max_lat, max_lon, limit=20
         except Exception as e:
             print(f"An unexpected error occurred: {e}")
             if attempt < max_retries - 1:
-                await asyncio.sleep((attempt + 1) * 5)
+                time.sleep((attempt + 1) * 5)
                 continue
             return []
     
@@ -777,7 +774,7 @@ def make_json_serializable(data):
     else:
         return data
 
-async def reverse_geocode_batch(coordinates_list):
+def reverse_geocode_batch(coordinates_list):
     """
     Reverse geocode a batch of coordinates to get addresses
     Uses Nominatim with rate limiting
@@ -789,50 +786,49 @@ async def reverse_geocode_batch(coordinates_list):
         'User-Agent': 'LocationAnalyzer/1.0'
     }
     
-    async with aiohttp.ClientSession() as session:
-        for i, (lat, lon) in enumerate(coordinates_list):
-            try:
-                params = {
-                    'lat': lat,
-                    'lon': lon,
-                    'format': 'json',
-                    'addressdetails': 1
-                }
+    for i, (lat, lon) in enumerate(coordinates_list):
+        try:
+            params = {
+                'lat': lat,
+                'lon': lon,
+                'format': 'json',
+                'addressdetails': 1
+            }
+            
+            if i > 0:
+                time.sleep(1.1)
+            
+            response = requests.get(base_url, params=params, headers=headers, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                address_parts = []
                 
-                if i > 0:
-                    await asyncio.sleep(1.1)
+                addr = data.get('address', {})
+                if 'road' in addr:
+                    address_parts.append(addr['road'])
+                if 'suburb' in addr or 'neighbourhood' in addr:
+                    address_parts.append(addr.get('suburb') or addr.get('neighbourhood'))
+                if 'city' in addr or 'town' in addr:
+                    address_parts.append(addr.get('city') or addr.get('town'))
+                if 'postcode' in addr:
+                    address_parts.append(addr['postcode'])
                 
-                async with session.get(base_url, params=params, headers=headers, timeout=10) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        address_parts = []
-                        
-                        addr = data.get('address', {})
-                        if 'road' in addr:
-                            address_parts.append(addr['road'])
-                        if 'suburb' in addr or 'neighbourhood' in addr:
-                            address_parts.append(addr.get('suburb') or addr.get('neighbourhood'))
-                        if 'city' in addr or 'town' in addr:
-                            address_parts.append(addr.get('city') or addr.get('town'))
-                        if 'postcode' in addr:
-                            address_parts.append(addr['postcode'])
-                        
-                        full_address = ', '.join(address_parts) if address_parts else data.get('display_name', 'N/A')
-                        addresses.append(full_address)
-                    else:
-                        addresses.append('N/A')
-                        
-            except Exception as e:
-                print(f"Error reverse geocoding {lat}, {lon}: {e}")
+                full_address = ', '.join(address_parts) if address_parts else data.get('display_name', 'N/A')
+                addresses.append(full_address)
+            else:
                 addresses.append('N/A')
+                
+        except Exception as e:
+            print(f"Error reverse geocoding {lat}, {lon}: {e}")
+            addresses.append('N/A')
     
     return addresses
 
-async def enrich_addresses(df, max_to_geocode=20):
+def enrich_addresses(df, max_to_geocode=20):
     """
     Enrich addresses for places that don't have them
     """
-    missing_address_mask = (df['Address'] == 'N/A') | (df['Address'].str.contains('India$', regex=True))
+    missing_address_mask = (df['Address'] == 'N/A') | (df['Address'].str.contains('India', regex=True))
     missing_indices = df[missing_address_mask].index.tolist()[:max_to_geocode]
     
     if not missing_indices:
@@ -841,7 +837,7 @@ async def enrich_addresses(df, max_to_geocode=20):
     print(f"Enriching {len(missing_indices)} addresses via reverse geocoding...")
     
     coords = [(df.loc[idx, 'Latitude'], df.loc[idx, 'Longitude']) for idx in missing_indices]
-    addresses = await reverse_geocode_batch(coords)
+    addresses = reverse_geocode_batch(coords)
     
     for idx, address in zip(missing_indices, addresses):
         if address != 'N/A':
@@ -855,7 +851,7 @@ async def enrich_addresses(df, max_to_geocode=20):
 # ============================================================================
 
 @app.route('/api/location', methods=['POST'])
-async def analyze_location():
+def analyze_location():
     print("Analyzing location...")
     
     data = request.json
@@ -866,11 +862,11 @@ async def analyze_location():
         return jsonify({"error": "Missing city or business information"}), 400
     
     try:
-        df, error = await get_data_for_city(city, business)
+        df, error = get_data_for_city(city, business)
         print(f"Found {len(df)} places")
 
         if not df.empty:
-            df = await enrich_addresses(df, max_to_geocode=20)
+            df = enrich_addresses(df, max_to_geocode=20)
 
     except Exception as e:
         print(f"Error fetching data: {e}")
@@ -879,8 +875,7 @@ async def analyze_location():
     if df.empty:
         return jsonify({"error": "No data found for the given city or business"}), 404
     
-    loop = asyncio.get_event_loop()
-    recommended_clusters = await loop.run_in_executor(None, perform_analysis, df)
+    recommended_clusters = perform_analysis(df)
     
     results = {
         "recommended_clusters": recommended_clusters
@@ -890,7 +885,7 @@ async def analyze_location():
 
 
 @app.route('/api/business', methods=['POST'])
-async def analyze_business():
+def analyze_business():
     print("Analyzing business...")
     
     data = request.json
@@ -900,7 +895,7 @@ async def analyze_business():
         return jsonify({"error": "Missing city"}), 400
     
     # Use the new function that gets bbox by city name
-    shop_data = await get_shops_in_bounding_box_by_city(city, limit=500)
+    shop_data = get_shops_in_bounding_box_by_city(city, limit=500)
     
     if not shop_data:
         return jsonify({"error": "No shops found in the area"}), 404
@@ -959,3 +954,4 @@ if __name__ == "__main__":
         app.run(debug=True, use_reloader=False, threaded=True)
     else:
         app.run(debug=True, threaded=True)
+
